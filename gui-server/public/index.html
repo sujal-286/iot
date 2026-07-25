@@ -1,0 +1,116 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+<title>Rover Console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;600;700&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark">◈</span>
+      <div>
+        <h1>ROVER CONSOLE</h1>
+        <p class="brand-sub">Environmental Monitoring Unit</p>
+      </div>
+    </div>
+    <div class="link-status">
+      <span id="roverDot" class="dot dot--off"></span>
+      <span id="roverLabel">Rover offline</span>
+      <span class="divider">/</span>
+      <span id="serverDot" class="dot dot--off"></span>
+      <span id="serverLabel">Connecting…</span>
+    </div>
+  </header>
+
+  <main class="grid">
+
+    <!-- RADAR -->
+    <section class="panel radar-panel">
+      <div class="panel-head">
+        <h2>Proximity Scan</h2>
+        <span class="eyebrow">3-SENSOR ARRAY · L / C / R</span>
+      </div>
+
+      <div class="radar-wrap">
+        <svg id="radarSvg" viewBox="0 0 400 230" class="radar-svg">
+          <!-- range rings -->
+          <path d="M 40 210 A 160 160 0 0 1 360 210" class="ring ring--outer" />
+          <path d="M 93 210 A 107 107 0 0 1 307 210" class="ring ring--mid" />
+          <path d="M 146 210 A 54 54 0 0 1 254 210" class="ring ring--inner" />
+
+          <!-- sector wedges, colored by JS -->
+          <path id="wedgeL" d="M 200 210 L 40 210 A 160 160 0 0 1 106 79 Z" class="wedge" />
+          <path id="wedgeC" d="M 200 210 L 106 79 A 160 160 0 0 1 294 79 Z" class="wedge" />
+          <path id="wedgeR" d="M 200 210 L 294 79 A 160 160 0 0 1 360 210 Z" class="wedge" />
+
+          <!-- sweep -->
+          <line id="sweep" x1="200" y1="210" x2="200" y2="50" class="sweep" />
+
+          <!-- rover glyph -->
+          <path d="M 200 195 L 190 214 L 210 214 Z" class="rover-glyph" />
+        </svg>
+
+        <div class="radar-readout">
+          <div class="readout-item">
+            <span class="readout-label">LEFT</span>
+            <span id="valL" class="readout-value">— cm</span>
+          </div>
+          <div class="readout-item">
+            <span class="readout-label">CENTER</span>
+            <span id="valC" class="readout-value">— cm</span>
+          </div>
+          <div class="readout-item">
+            <span class="readout-label">RIGHT</span>
+            <span id="valR" class="readout-value">— cm</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- CONTROLS -->
+    <section class="panel control-panel">
+      <div class="panel-head">
+        <h2>Drive</h2>
+        <span class="eyebrow" id="modeTag">MANUAL</span>
+      </div>
+
+      <div class="joystick-wrap">
+        <div id="joyBase" class="joy-base">
+          <div id="joyKnob" class="joy-knob"></div>
+        </div>
+        <p class="joy-hint">Drag to steer · releases to stop</p>
+      </div>
+
+      <div class="toggle-row">
+        <button id="oaToggle" class="toggle-btn" data-on="false">
+          <span class="toggle-led"></span>
+          <span class="toggle-text">
+            <strong>Obstacle Assist</strong>
+            <small>Blocks manual driving into obstacles</small>
+          </span>
+        </button>
+
+        <button id="autoToggle" class="toggle-btn toggle-btn--auto" data-on="false">
+          <span class="toggle-led"></span>
+          <span class="toggle-text">
+            <strong>Autonomous Mode</strong>
+            <small>Rover drives &amp; avoids on its own</small>
+          </span>
+        </button>
+      </div>
+
+      <button id="stopBtn" class="stop-btn">EMERGENCY STOP</button>
+    </section>
+
+  </main>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
