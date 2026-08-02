@@ -1,0 +1,783 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Rover Console</title>
+<style>
+/* ── Reset & Base ─────────────────────────────────────────────────────────── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:       #0d0f14;
+  --surface:  #141720;
+  --surface2: #1c2030;
+  --border:   #252a3a;
+  --text:     #e2e6f0;
+  --muted:    #5a6080;
+  --accent:   #4a7fff;
+  --green:    #22c55e;
+  --yellow:   #eab308;
+  --red:      #ef4444;
+  --orange:   #f97316;
+  --radius:   12px;
+  --font:     'Courier New', monospace;
+}
+body{
+  background:var(--bg);
+  color:var(--text);
+  font-family:var(--font);
+  min-height:100vh;
+  display:flex;
+  flex-direction:column;
+}
+
+/* ── Header ──────────────────────────────────────────────────────────────── */
+header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding:14px 28px;
+  border-bottom:1px solid var(--border);
+  background:var(--surface);
+}
+.brand{display:flex;align-items:center;gap:12px}
+.brand-icon{
+  width:32px;height:32px;
+  background:var(--accent);
+  border-radius:6px;
+  display:grid;place-items:center;
+  font-size:18px;
+}
+.brand-name{font-size:15px;font-weight:700;letter-spacing:2px;color:var(--text)}
+.brand-sub{font-size:11px;color:var(--muted);margin-top:2px;letter-spacing:1px}
+.status-row{display:flex;gap:20px;align-items:center}
+.status-pill{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--muted);letter-spacing:.5px}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--muted)}
+.dot.green{background:var(--green);box-shadow:0 0 6px var(--green)}
+.dot.red  {background:var(--red);box-shadow:0 0 6px var(--red)}
+.dot.pulse{animation:pulse 1.5s infinite}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* ── Main grid ───────────────────────────────────────────────────────────── */
+main{
+  flex:1;
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  grid-template-rows:auto auto;
+  gap:20px;
+  padding:20px 28px;
+}
+@media(max-width:900px){main{grid-template-columns:1fr}}
+
+/* ── Cards ───────────────────────────────────────────────────────────────── */
+.card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  padding:20px;
+}
+.card-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:center;
+  margin-bottom:18px;
+}
+.card-title{font-size:13px;font-weight:700;letter-spacing:1.5px;color:var(--text)}
+.card-tag{
+  font-size:10px;letter-spacing:1px;color:var(--muted);
+  border:1px solid var(--border);
+  padding:3px 8px;border-radius:4px;
+}
+
+/* ── Proximity Radar (top-down rover view) ───────────────────────────────── */
+#radar-wrap{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:16px;
+}
+#radar-canvas{
+  width:100%;
+  max-width:380px;
+  aspect-ratio:1;
+  display:block;
+}
+.sensor-bars{
+  display:grid;
+  grid-template-columns:1fr 1fr 1fr 1fr;
+  gap:8px;
+  width:100%;
+}
+.sensor-bar{
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:10px 8px;
+  text-align:center;
+}
+.sensor-bar .label{font-size:9px;letter-spacing:1.5px;color:var(--muted);margin-bottom:6px}
+.sensor-bar .val{font-size:20px;font-weight:700;transition:color .3s}
+.sensor-bar .unit{font-size:10px;color:var(--muted);margin-top:2px}
+.val.green{color:var(--green)}
+.val.yellow{color:var(--yellow)}
+.val.red   {color:var(--red)}
+
+/* ── Drive Panel ─────────────────────────────────────────────────────────── */
+#joystick-wrap{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap:16px;
+}
+#joystick-zone{
+  width:200px;height:200px;
+  border-radius:50%;
+  background:var(--surface2);
+  border:2px solid var(--border);
+  position:relative;
+  cursor:grab;
+  touch-action:none;
+  user-select:none;
+}
+#joystick-zone:active{cursor:grabbing}
+#joystick-knob{
+  width:60px;height:60px;
+  border-radius:50%;
+  background:var(--accent);
+  position:absolute;
+  top:50%;left:50%;
+  transform:translate(-50%,-50%);
+  transition:box-shadow .1s;
+  pointer-events:none;
+}
+#joystick-knob.active{box-shadow:0 0 20px var(--accent)}
+.joy-hint{font-size:10px;color:var(--muted);letter-spacing:.5px}
+
+/* direction labels */
+.dir-labels{
+  position:absolute;
+  inset:0;pointer-events:none;
+  font-size:9px;letter-spacing:1px;color:var(--muted);
+}
+.dir-labels span{position:absolute}
+.dir-labels .d-fwd {top:8px;  left:50%;transform:translateX(-50%)}
+.dir-labels .d-bck {bottom:8px;left:50%;transform:translateX(-50%)}
+.dir-labels .d-lft {left:8px; top:50%;transform:translateY(-50%)}
+.dir-labels .d-rgt {right:8px;top:50%;transform:translateY(-50%)}
+
+/* ── Mode toggles ────────────────────────────────────────────────────────── */
+.toggle-group{display:flex;flex-direction:column;gap:8px;width:100%}
+.toggle-row{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:12px 14px;
+  cursor:pointer;
+  transition:border-color .2s;
+}
+.toggle-row:hover{border-color:var(--accent)}
+.toggle-row.active{border-color:var(--accent)}
+.toggle-info .t-name{font-size:13px;font-weight:600}
+.toggle-info .t-desc{font-size:10px;color:var(--muted);margin-top:3px;letter-spacing:.3px}
+.toggle-switch{
+  width:36px;height:20px;
+  border-radius:10px;
+  background:var(--border);
+  position:relative;
+  transition:background .2s;
+  flex-shrink:0;
+}
+.toggle-switch::after{
+  content:'';
+  position:absolute;
+  width:14px;height:14px;
+  border-radius:50%;
+  background:#fff;
+  top:3px;left:3px;
+  transition:left .2s;
+}
+.toggle-row.active .toggle-switch{background:var(--accent)}
+.toggle-row.active .toggle-switch::after{left:19px}
+
+/* ── Emergency stop ──────────────────────────────────────────────────────── */
+#e-stop{
+  width:100%;
+  padding:14px;
+  background:rgba(239,68,68,.15);
+  border:1px solid var(--red);
+  border-radius:8px;
+  color:var(--red);
+  font-family:var(--font);
+  font-size:12px;
+  font-weight:700;
+  letter-spacing:2px;
+  cursor:pointer;
+  transition:background .2s,transform .1s;
+}
+#e-stop:hover{background:rgba(239,68,68,.25)}
+#e-stop:active{transform:scale(.97)}
+
+/* ── Telemetry log (bottom row) ──────────────────────────────────────────── */
+#log-card{grid-column:1/-1}
+#log{
+  height:120px;overflow-y:auto;
+  font-size:11px;line-height:1.7;
+  color:var(--muted);
+  background:var(--surface2);
+  border:1px solid var(--border);
+  border-radius:8px;
+  padding:10px 14px;
+}
+#log .entry{display:flex;gap:12px}
+#log .ts{color:var(--accent);flex-shrink:0}
+#log .msg.warn{color:var(--yellow)}
+#log .msg.err {color:var(--red)}
+#log .msg.ok  {color:var(--green)}
+</style>
+</head>
+<body>
+
+<!-- ── Header ─────────────────────────────────────────────────────────────── -->
+<header>
+  <div class="brand">
+    <div class="brand-icon">🤖</div>
+    <div>
+      <div class="brand-name">ROVER CONSOLE</div>
+      <div class="brand-sub">Environmental Monitoring Unit</div>
+    </div>
+  </div>
+  <div class="status-row">
+    <div class="status-pill">
+      <div class="dot red pulse" id="rover-dot"></div>
+      <span id="rover-status-text">Rover offline</span>
+    </div>
+    <div class="status-pill">
+      <div class="dot green"></div>
+      <span>Console linked</span>
+    </div>
+  </div>
+</header>
+
+<!-- ── Main ───────────────────────────────────────────────────────────────── -->
+<main>
+
+  <!-- Proximity Radar -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">PROXIMITY RADAR</span>
+      <span class="card-tag">4-SENSOR · F / B / L / R</span>
+    </div>
+    <div id="radar-wrap">
+      <canvas id="radar-canvas" width="380" height="380"></canvas>
+      <div class="sensor-bars">
+        <div class="sensor-bar">
+          <div class="label">FRONT</div>
+          <div class="val" id="val-front">—</div>
+          <div class="unit">cm</div>
+        </div>
+        <div class="sensor-bar">
+          <div class="label">BACK</div>
+          <div class="val" id="val-back">—</div>
+          <div class="unit">cm</div>
+        </div>
+        <div class="sensor-bar">
+          <div class="label">LEFT</div>
+          <div class="val" id="val-left">—</div>
+          <div class="unit">cm</div>
+        </div>
+        <div class="sensor-bar">
+          <div class="label">RIGHT</div>
+          <div class="val" id="val-right">—</div>
+          <div class="unit">cm</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Drive Panel -->
+  <div class="card">
+    <div class="card-header">
+      <span class="card-title">DRIVE</span>
+      <span class="card-tag" id="mode-tag">MANUAL</span>
+    </div>
+    <div id="joystick-wrap">
+      <div id="joystick-zone">
+        <div class="dir-labels">
+          <span class="d-fwd">FWD</span>
+          <span class="d-bck">BCK</span>
+          <span class="d-lft">L</span>
+          <span class="d-rgt">R</span>
+        </div>
+        <div id="joystick-knob"></div>
+      </div>
+      <div class="joy-hint">Drag to steer · release to stop</div>
+      <div class="toggle-group">
+        <div class="toggle-row" id="toggle-obstacle" onclick="toggleObstacle()">
+          <div class="toggle-info">
+            <div class="t-name">Obstacle Assist</div>
+            <div class="t-desc">Blocks manual driving into obstacles</div>
+          </div>
+          <div class="toggle-switch"></div>
+        </div>
+        <div class="toggle-row" id="toggle-auto" onclick="toggleAuto()">
+          <div class="toggle-info">
+            <div class="t-name">Autonomous Mode</div>
+            <div class="t-desc">Rover drives &amp; avoids on its own</div>
+          </div>
+          <div class="toggle-switch"></div>
+        </div>
+      </div>
+      <button id="e-stop" onclick="emergencyStop()">⬛ EMERGENCY STOP</button>
+    </div>
+  </div>
+
+  <!-- Log -->
+  <div class="card" id="log-card">
+    <div class="card-header">
+      <span class="card-title">TELEMETRY LOG</span>
+      <span class="card-tag" id="fps-tag">0 fps</span>
+    </div>
+    <div id="log"></div>
+  </div>
+
+</main>
+
+<script>
+/* ════════════════════════════════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════════════════════════════════ */
+const state = {
+  roverOnline:   false,
+  autoMode:      false,
+  obstacleAssist:false,
+  sensors: { front:null, back:null, left:null, right:null },
+  // median filter buffers (5 readings each)
+  buf: { front:[], back:[], left:[], right:[] },
+  BUF_SIZE: 5,
+};
+
+/* ════════════════════════════════════════════════════════════════════
+   WEBSOCKET
+═══════════════════════════════════════════════════════════════════════ */
+let ws = null;
+let fpsCount = 0, fpsLast = Date.now();
+
+function connect() {
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  const url   = `${proto}://${location.host}/ui`;
+  ws = new WebSocket(url);
+
+  ws.onopen  = () => log('WebSocket connected to bridge', 'ok');
+  ws.onclose = () => { log('WebSocket closed — reconnecting…', 'warn'); setTimeout(connect, 3000); };
+  ws.onerror = ()  => log('WebSocket error', 'err');
+
+  ws.onmessage = e => {
+    try {
+      const data = JSON.parse(e.data);
+      if (data.type === 'rover_status') setRoverOnline(data.online);
+      else if (data.type === 'sensors') ingestSensors(data);
+    } catch(_) {}
+  };
+}
+
+function send(obj) {
+  if (ws && ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(obj));
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   SENSOR INGESTION & MEDIAN FILTER
+═══════════════════════════════════════════════════════════════════════ */
+function median(arr) {
+  const s = [...arr].sort((a,b)=>a-b);
+  const m = Math.floor(s.length/2);
+  return s.length%2 ? s[m] : (s[m-1]+s[m])/2;
+}
+
+function pushBuf(key, val) {
+  const b = state.buf[key];
+  b.push(val);
+  if (b.length > state.BUF_SIZE) b.shift();
+  return median(b);
+}
+
+function ingestSensors(data) {
+  ['front','back','left','right'].forEach(k => {
+    if (data[k] !== undefined) {
+      state.sensors[k] = pushBuf(k, Number(data[k]));
+    }
+  });
+  updateSensorUI();
+  drawRadar();
+
+  // FPS counter
+  fpsCount++;
+  const now = Date.now();
+  if (now - fpsLast >= 1000) {
+    document.getElementById('fps-tag').textContent = fpsCount + ' fps';
+    fpsCount = 0; fpsLast = now;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   COLOUR HELPERS
+═══════════════════════════════════════════════════════════════════════ */
+function distColor(cm, alpha=1) {
+  if (cm === null) return `rgba(90,96,128,${alpha})`;
+  if (cm >  40)   return `rgba(34,197,94,${alpha})`;   // green
+  if (cm >= 20)   return `rgba(234,179,8,${alpha})`;   // yellow
+  return               `rgba(239,68,68,${alpha})`;     // red
+}
+function distClass(cm) {
+  if (cm === null) return '';
+  if (cm >  40)   return 'green';
+  if (cm >= 20)   return 'yellow';
+  return 'red';
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   SENSOR BAR UI
+═══════════════════════════════════════════════════════════════════════ */
+function updateSensorUI() {
+  ['front','back','left','right'].forEach(k => {
+    const v = state.sensors[k];
+    const el = document.getElementById('val-'+k);
+    el.textContent = v !== null ? Math.round(v) : '—';
+    el.className = 'val ' + distClass(v);
+  });
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   RADAR CANVAS — top-down rover view
+═══════════════════════════════════════════════════════════════════════ */
+const canvas = document.getElementById('radar-canvas');
+const ctx    = canvas.getContext('2d');
+
+function drawRadar() {
+  const W = canvas.width, H = canvas.height;
+  const cx = W/2, cy = H/2;
+  const maxR = W * 0.42;        // max sensor bar radius
+  const roverW = W*0.12, roverH = W*0.18;
+
+  ctx.clearRect(0,0,W,H);
+
+  // Background circle
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx,cy,maxR,0,Math.PI*2);
+  ctx.fillStyle='#141720';
+  ctx.fill();
+  ctx.strokeStyle='#252a3a';
+  ctx.lineWidth=1;
+  ctx.stroke();
+  ctx.restore();
+
+  // Range rings
+  [40,20].forEach(d => {
+    const r = Math.min(d/1.5, 40) / 40 * maxR;
+    ctx.beginPath();
+    ctx.arc(cx,cy,r*(maxR/maxR),0,Math.PI*2);  // relative rings
+    const fr = d === 40 ? maxR * 0.7 : maxR * 0.35;
+    ctx.beginPath();
+    ctx.arc(cx,cy,fr,0,Math.PI*2);
+    ctx.strokeStyle = d===40 ? 'rgba(234,179,8,.25)' : 'rgba(239,68,68,.25)';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4,4]);
+    ctx.stroke();
+    ctx.setLineDash([]);
+  });
+
+  // Ring labels
+  ctx.font = '9px monospace';
+  ctx.fillStyle = 'rgba(90,96,128,.8)';
+  ctx.textAlign = 'left';
+  ctx.fillText('40cm', cx+maxR*0.7+4, cy-4);
+  ctx.fillText('20cm', cx+maxR*0.35+4, cy-4);
+
+  // Sensor arcs — FRONT(top), BACK(bottom), LEFT(left), RIGHT(right)
+  const dirs = [
+    { key:'front', angle:-Math.PI/2, label:'FRONT', lx:cx,      ly:cy-maxR-14 },
+    { key:'back',  angle: Math.PI/2, label:'BACK',  lx:cx,      ly:cy+maxR+20 },
+    { key:'left',  angle: Math.PI,   label:'LEFT',  lx:cx-maxR-28, ly:cy      },
+    { key:'right', angle: 0,         label:'RIGHT', lx:cx+maxR+8,  ly:cy      },
+  ];
+
+  dirs.forEach(({ key, angle, label, lx, ly }) => {
+    const cm  = state.sensors[key];
+    // bar length proportional to closeness: closer = bigger danger bar
+    const pct = cm === null ? 0 : Math.max(0, Math.min(1, 1 - cm/80));
+    const barLen = pct * maxR * 0.85;
+
+    // danger beam
+    if (barLen > 0) {
+      const grad = ctx.createLinearGradient(cx, cy,
+        cx + Math.cos(angle)*barLen,
+        cy + Math.sin(angle)*barLen);
+      grad.addColorStop(0, 'transparent');
+      grad.addColorStop(1, distColor(cm, 0.6));
+
+      ctx.beginPath();
+      // fan wedge (±20°)
+      const spread = Math.PI/9;
+      ctx.moveTo(cx,cy);
+      ctx.arc(cx,cy,barLen,angle-spread,angle+spread);
+      ctx.closePath();
+      ctx.fillStyle = grad;
+      ctx.fill();
+    }
+
+    // direction tick
+    ctx.beginPath();
+    ctx.moveTo(cx + Math.cos(angle)*maxR*0.88,
+               cy + Math.sin(angle)*maxR*0.88);
+    ctx.lineTo(cx + Math.cos(angle)*maxR,
+               cy + Math.sin(angle)*maxR);
+    ctx.strokeStyle = cm !== null ? distColor(cm) : '#5a6080';
+    ctx.lineWidth = 2;
+    ctx.stroke();
+
+    // label + value
+    ctx.textAlign = 'center';
+    ctx.font = 'bold 9px monospace';
+    ctx.fillStyle = '#5a6080';
+    ctx.fillText(label, lx, ly);
+    ctx.font = 'bold 13px monospace';
+    ctx.fillStyle = cm !== null ? distColor(cm) : '#5a6080';
+    ctx.fillText(cm !== null ? Math.round(cm)+'cm' : '—', lx, ly + 14);
+  });
+
+  // Rover body (top-down rectangle with wheels)
+  ctx.save();
+  ctx.translate(cx,cy);
+
+  // Wheels
+  const ww=roverW*0.25, wh=roverH*0.35;
+  const wheelPositions=[
+    [-roverW/2-ww/2, -roverH*0.3],
+    [-roverW/2-ww/2,  roverH*0.3],
+    [ roverW/2+ww/2-ww, -roverH*0.3],
+    [ roverW/2+ww/2-ww,  roverH*0.3],
+  ];
+  ctx.fillStyle='#2a3045';
+  ctx.strokeStyle='#4a7fff';
+  ctx.lineWidth=1.5;
+  wheelPositions.forEach(([wx,wy])=>{
+    roundRect(ctx,wx,wy-wh/2,ww,wh,3);
+    ctx.fill();ctx.stroke();
+  });
+
+  // Body
+  ctx.fillStyle='#1c2030';
+  ctx.strokeStyle='#4a7fff';
+  ctx.lineWidth=2;
+  roundRect(ctx,-roverW/2,-roverH/2,roverW,roverH,8);
+  ctx.fill();ctx.stroke();
+
+  // Arrow on body (forward indicator)
+  ctx.beginPath();
+  ctx.moveTo(0,-roverH*0.3);
+  ctx.lineTo(-roverW*0.22, roverH*0.1);
+  ctx.lineTo( roverW*0.22, roverH*0.1);
+  ctx.closePath();
+  ctx.fillStyle='rgba(74,127,255,.7)';
+  ctx.fill();
+
+  ctx.restore();
+}
+
+function roundRect(ctx,x,y,w,h,r){
+  ctx.beginPath();
+  ctx.moveTo(x+r,y);
+  ctx.lineTo(x+w-r,y);
+  ctx.quadraticCurveTo(x+w,y,x+w,y+r);
+  ctx.lineTo(x+w,y+h-r);
+  ctx.quadraticCurveTo(x+w,y+h,x+w-r,y+h);
+  ctx.lineTo(x+r,y+h);
+  ctx.quadraticCurveTo(x,y+h,x,y+h-r);
+  ctx.lineTo(x,y+r);
+  ctx.quadraticCurveTo(x,y,x+r,y);
+  ctx.closePath();
+}
+
+// Initial static draw
+drawRadar();
+
+/* ════════════════════════════════════════════════════════════════════
+   JOYSTICK
+═══════════════════════════════════════════════════════════════════════ */
+const zone  = document.getElementById('joystick-zone');
+const knob  = document.getElementById('joystick-knob');
+const RADIUS = 70;  // max knob travel in px
+let dragging = false;
+let sendInterval = null;
+let lastVx = 0, lastVy = 0;
+
+function getRelPos(e, el) {
+  const r = el.getBoundingClientRect();
+  const cx = r.left + r.width/2, cy = r.top + r.height/2;
+  const px = (e.touches ? e.touches[0].clientX : e.clientX) - cx;
+  const py = (e.touches ? e.touches[0].clientY : e.clientY) - cy;
+  return { px, py };
+}
+
+function clampJoy(px, py) {
+  const dist = Math.sqrt(px*px + py*py);
+  if (dist <= RADIUS) return { x:px, y:py };
+  return { x:px/dist*RADIUS, y:py/dist*RADIUS };
+}
+
+function startDrag(e) {
+  e.preventDefault();
+  dragging = true;
+  knob.classList.add('active');
+  sendInterval = setInterval(sendDrive, 80);
+}
+
+function moveDrag(e) {
+  if (!dragging) return;
+  e.preventDefault();
+  const { px, py } = getRelPos(e, zone);
+  const { x, y } = clampJoy(px, py);
+  knob.style.transform = `translate(calc(-50% + ${x}px), calc(-50% + ${y}px))`;
+  lastVx = Math.round((x / RADIUS) * 255);
+  lastVy = Math.round((-y / RADIUS) * 255);  // negative: up=forward
+}
+
+function endDrag() {
+  if (!dragging) return;
+  dragging = false;
+  knob.classList.remove('active');
+  knob.style.transform = 'translate(-50%, -50%)';
+  clearInterval(sendInterval);
+  lastVx = 0; lastVy = 0;
+  send({ type:'drive', vx:0, vy:0 });
+}
+
+function sendDrive() {
+  if (state.autoMode) return;
+  send({ type:'drive', vx:lastVx, vy:lastVy });
+}
+
+zone.addEventListener('mousedown',  startDrag);
+zone.addEventListener('touchstart', startDrag, { passive:false });
+window.addEventListener('mousemove',  moveDrag);
+window.addEventListener('touchmove',  moveDrag, { passive:false });
+window.addEventListener('mouseup',    endDrag);
+window.addEventListener('touchend',   endDrag);
+
+/* ════════════════════════════════════════════════════════════════════
+   MODE TOGGLES
+═══════════════════════════════════════════════════════════════════════ */
+function toggleObstacle() {
+  if (state.autoMode) return;  // obstacle is mandatory in auto
+  state.obstacleAssist = !state.obstacleAssist;
+  document.getElementById('toggle-obstacle').classList.toggle('active', state.obstacleAssist);
+  send({ type:'obstacle', enabled: state.obstacleAssist });
+  log(`Obstacle Assist: ${state.obstacleAssist ? 'ON' : 'OFF'}`, state.obstacleAssist ? 'ok' : 'warn');
+}
+
+function toggleAuto() {
+  state.autoMode = !state.autoMode;
+  document.getElementById('toggle-auto').classList.toggle('active', state.autoMode);
+  document.getElementById('mode-tag').textContent = state.autoMode ? 'AUTO' : 'MANUAL';
+
+  if (state.autoMode) {
+    // Obstacle avoidance is mandatory in autonomous mode
+    state.obstacleAssist = true;
+    document.getElementById('toggle-obstacle').classList.add('active');
+    send({ type:'obstacle', enabled: true });
+  }
+
+  send({ type:'mode', mode: state.autoMode ? 'auto' : 'manual' });
+  log(`Mode: ${state.autoMode ? 'AUTONOMOUS' : 'MANUAL'}`, 'ok');
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   EMERGENCY STOP
+═══════════════════════════════════════════════════════════════════════ */
+function emergencyStop() {
+  send({ type:'stop' });
+  if (state.autoMode) {
+    state.autoMode = false;
+    document.getElementById('toggle-auto').classList.remove('active');
+    document.getElementById('mode-tag').textContent = 'MANUAL';
+  }
+  log('⬛ EMERGENCY STOP triggered', 'err');
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   ROVER STATUS
+═══════════════════════════════════════════════════════════════════════ */
+function setRoverOnline(online) {
+  state.roverOnline = online;
+  const dot  = document.getElementById('rover-dot');
+  const text = document.getElementById('rover-status-text');
+  if (online) {
+    dot.className  = 'dot green pulse';
+    text.textContent = 'Rover online';
+    log('Rover connected', 'ok');
+  } else {
+    dot.className  = 'dot red';
+    text.textContent = 'Rover offline';
+    log('Rover disconnected', 'err');
+    // Clear sensors
+    ['front','back','left','right'].forEach(k => state.sensors[k] = null);
+    updateSensorUI();
+    drawRadar();
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   LOG
+═══════════════════════════════════════════════════════════════════════ */
+const logEl = document.getElementById('log');
+function log(msg, cls='') {
+  const now = new Date();
+  const ts  = now.toTimeString().slice(0,8);
+  const row = document.createElement('div');
+  row.className = 'entry';
+  row.innerHTML = `<span class="ts">${ts}</span><span class="msg ${cls}">${msg}</span>`;
+  logEl.appendChild(row);
+  logEl.scrollTop = logEl.scrollHeight;
+  // Keep max 100 lines
+  while (logEl.children.length > 100) logEl.removeChild(logEl.firstChild);
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   KEYBOARD CONTROLS (WASD / Arrow keys)
+═══════════════════════════════════════════════════════════════════════ */
+const keys = {};
+document.addEventListener('keydown', e => {
+  keys[e.key] = true;
+  if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight','w','a','s','d'].includes(e.key)) {
+    e.preventDefault();
+    applyKeyboard();
+  }
+  if (e.key === ' ') { e.preventDefault(); emergencyStop(); }
+});
+document.addEventListener('keyup', e => {
+  keys[e.key] = false;
+  applyKeyboard();
+});
+
+function applyKeyboard() {
+  if (state.autoMode) return;
+  const fwd  = keys['ArrowUp']    || keys['w'];
+  const bck  = keys['ArrowDown']  || keys['s'];
+  const lft  = keys['ArrowLeft']  || keys['a'];
+  const rgt  = keys['ArrowRight'] || keys['d'];
+  const vy   = fwd ? 255 : bck ? -255 : 0;
+  const vx   = rgt ? 255 : lft ? -255 : 0;
+  send({ type:'drive', vx, vy });
+}
+
+/* ════════════════════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════════════════════ */
+log('Console initialised');
+connect();
+</script>
+</body>
+</html>
